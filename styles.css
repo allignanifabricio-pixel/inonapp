@@ -1,0 +1,56 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+header {
+  background: #007AFF;
+  color: white;
+  text-align: center;
+  padding: 15px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border-bottom: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+}
+
+.saldo {
+  text-align: center;
+  font-size: 20px;
+  margin: 15px;
+}
+
+#agregar {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #007AFF;
+  color: white;
+  border: none;
+  font-size: 30px;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  margin: 100px auto;
+  width: 80%;
+}
