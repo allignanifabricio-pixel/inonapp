@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ingresos y Egresos</title>
+
+<link rel="manifest" href="manifest.json">
+
+<style>
+:root {
+    --bg: #ffffff;
+    --text: #000000;
+    --primary: #1976d2;
+}
+
+body.dark {
+    --bg: #121212;
+    --text: #ffffff;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    transition: 0.3s;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    background: var(--primary);
+    color: white;
+    align-items: center;
+}
+
+button {
+    padding: 6px 10px;
+    margin: 2px;
+}
+
+#monthTitle {
+    text-align: center;
+    font-weight: bold;
+    margin: 10px;
+    text-transform: capitalize;
+}
+
+#formContainer {
+    padding: 10px;
+    border-bottom: 1px solid gray;
+}
+
+.formRow {
+    display: grid;
+    grid-template-columns: 110px 1fr 80px 80px 60px;
+    gap: 5px;
+}
+
+.formRow input {
+    width: 100%;
+    padding: 4px;
+}
+
+#grid {
+    padding: 10px;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 90px 1fr 80px 80px;
+    gap: 5px;
+    margin-bottom: 5px;
+    align-items: center;
+}
+
+.total {
+    font-weight: bold;
+    border-top: 2px solid gray;
+    padding-top: 5px;
+}
+</style>
+</head>
+<body>
+
+<header>
+    <button onclick="toggleDark()">🌙</button>
+    <div>Ingresos y Egresos</div>
+</header>
+
+<div id="monthTitle"></div>
+
+<div id="formContainer">
+    <div class="formRow">
+        <input type="date" id="date">
+        <input type="text" id="detail" placeholder="Detalle">
+        <input type="number" id="debe" placeholder="Debe">
+        <input type="number" id="haber" placeholder="Haber">
+        <button onclick="saveMovement()">✔</button>
+    </div>
+</div>
+
+<div id="grid"></div>
+
+<script>
+let currentDate = new Date();
+let movements = JSON.parse(localStorage.getItem("movements") || "{}");
+let startX = 0;
+let editIndex = null;
+let editKey = null;
+
+function save() {
+    localStorage.setItem("movements", JSON.stringify(movements));
+}
+
+function getMonthKey(date) {
+    return date.getFullYear() + "-" + (date.getMonth()+1);
+}
+
+function getKeyFromDateInput(dateStr) {
+    const d = new Date(dateStr);
+    return d.getFullYear() + "-" + (d.getMonth()+1);
+}
+
+function formatDateToDisplay(dateStr) {
+    const d = new Date(dateStr);
+    const day = String(d.getDate()).padStart(2,'0');
+    const month = String(d.getMonth()+1).padStart(2,'0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+}
+
+function render() {
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+
+    const key = getMonthKey(currentDate);
+    const data = movements[key] || [];
+
+    document.getElementById("monthTitle").innerText =
+        currentDate.toLocaleString("es-ES", {month:"long", year:"numeric"});
+
+    let total = 0;
+
+    data.forEach((m, index) => {
+        const row = document.createElement("div");
+        row.className = "row";
+
+        row.innerHTML = `
+            <div>${m.date}</div>
+            <div>${m.detail}</div>
+            <div>${m.debe || ""}</div>
+            <div>${m.haber || ""}</div>
+        `;
+
+        row.onclick = () => loadForEdit(index, key);
+        row.oncontextmenu = (e) => {
+            e.preventDefault();
+            deleteMovement(index, key);
+        };
+
+        total += (parseFloat(m.haber) || 0) - (parseFloat(m.debe) || 0);
+        grid.appendChild(row);
+    });
+
+    const totalRow = document.createElement("div");
+    totalRow.className = "row total";
+    totalRow.innerHTML = `
+        <div></div>
+        <div>Saldo</div>
+        <div></div>
+        <div>${total.toFixed(2)}</div>
+    `;
+    grid.appendChild(totalRow);
+}
+
+function saveMovement() {
+    const dateInput = document.getElementById("date").value;
+    const detail = document.getElementById("detail").value;
+    const debe = document.getElementById("debe").value;
+    const haber = document.getElementById("haber").value;
+
+    if (!dateInput || !detail) return;
+
+    const key = getKeyFromDateInput(dateInput);
+    const formattedDate = formatDateToDisplay(dateInput);
+
+    if (!movements[key]) movements[key] = [];
+
+    const movement = { date: formattedDate, detail, debe, haber };
+
+    if (editIndex !== null) {
+        movements[editKey].splice(editIndex,1);
+        movements[key].push(movement);
+        editIndex = null;
+        editKey = null;
+    } else {
+        movements[key].push(movement);
+    }
+
+    save();
+    clearForm();
+    render();
+}
+
+function loadForEdit(index, key) {
+    const m = movements[key][index];
+    document.getElementById("detail").value = m.detail;
+    document.getElementById("debe").value = m.debe;
+    document.getElementById("haber").value = m.haber;
+
+    const parts = m.date.split("/");
+    document.getElementById("date").value =
+        `${parts[2]}-${parts[1]}-${parts[0]}`;
+
+    editIndex = index;
+    editKey = key;
+}
+
+function deleteMovement(index, key) {
+    if (!confirm("¿Borrar movimiento?")) return;
+    movements[key].splice(index,1);
+    save();
+    render();
+}
+
+function clearForm() {
+    document.getElementById("date").value = "";
+    document.getElementById("detail").value = "";
+    document.getElementById("debe").value = "";
+    document.getElementById("haber").value = "";
+}
+
+function toggleDark() {
+    document.body.classList.toggle("dark");
+}
+
+document.addEventListener("touchstart", e => startX = e.touches[0].clientX);
+
+document.addEventListener("touchend", e => {
+    let endX = e.changedTouches[0].clientX;
+    if (endX - startX > 50) changeMonth(-1);
+    if (startX - endX > 50) changeMonth(1);
+});
+
+function changeMonth(offset) {
+    currentDate.setMonth(currentDate.getMonth() + offset);
+    render();
+}
+
+render();
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js');
+}
+</script>
+
+</body>
+</html>
