@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Control Ingresos</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1e88e5">
+
+<style>
+
+/* --- Reset y bloqueo de selección --- */
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+
+body{
+  font-family: Arial, sans-serif;
+  background:#f4f6f9;
+  color:#222;
+  padding-bottom:90px;
+  -webkit-tap-highlight-color:transparent;
+  transition:.3s;
+}
+
+body.dark{
+  background:#121212;
+  color:#fff;
+}
+
+/* --- Header --- */
+.header{
+  text-align:center;
+  padding:15px;
+  font-size:20px;
+  font-weight:bold;
+}
+
+/* --- Botones superiores --- */
+.top-buttons{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+button{
+  border:none;
+  padding:8px 12px;
+  border-radius:8px;
+  font-size:14px;
+}
+
+.dark-btn{
+  background:#333;
+  color:#fff;
+}
+
+body.dark .dark-btn{
+  background:#ddd;
+  color:#000;
+}
+
+/* --- Lista de movimientos --- */
+.container{
+  padding:10px;
+}
+
+.card{
+  background:#fff;
+  margin-bottom:8px;
+  padding:10px;
+  border-radius:12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:14px;
+  box-shadow:0 2px 6px rgba(0,0,0,.1);
+  transition:.2s;
+}
+
+body.dark .card{
+  background:#1f1f1f;
+}
+
+.card span{
+  flex:1;
+  text-align:center;
+}
+
+.debe{
+  color:red;
+}
+
+.haber{
+  color:green;
+}
+
+.saldo{
+  font-weight:bold;
+  text-align:right;
+  margin-top:10px;
+  padding:10px;
+}
+
+/* --- Botón + --- */
+.add-btn{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:60px;
+  height:60px;
+  border-radius:50%;
+  background:#1e88e5;
+  color:#fff;
+  font-size:30px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 4px 10px rgba(0,0,0,.3);
+}
+
+/* --- Modal --- */
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.5);
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+
+.modal-content{
+  background:#fff;
+  padding:20px;
+  border-radius:16px;
+  width:90%;
+  max-width:400px;
+}
+
+body.dark .modal-content{
+  background:#1f1f1f;
+}
+
+.modal-content input{
+  width:100%;
+  margin-bottom:10px;
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-size:14px;
+}
+
+.modal-buttons{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.save-btn{
+  background:#1e88e5;
+  color:#fff;
+  flex:1;
+}
+
+.cancel-btn{
+  background:#aaa;
+  color:#fff;
+  flex:1;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header" id="monthTitle"></div>
+
+<div class="top-buttons">
+  <button class="dark-btn" onclick="toggleDark()">Modo oscuro</button>
+</div>
+
+<div class="container" id="movements"></div>
+<div class="saldo" id="saldo"></div>
+
+<div class="add-btn" onclick="openModal()">+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <input type="date" id="fecha">
+    <input type="text" id="detalle" placeholder="Detalle">
+    <input type="number" id="debe" placeholder="Debe">
+    <input type="number" id="haber" placeholder="Haber">
+
+    <div class="modal-buttons">
+      <button class="save-btn" onclick="saveMovement()">Guardar</button>
+      <button class="cancel-btn" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+
+let currentDate = new Date();
+let editId = null;
+
+function getMonthKey(date){
+  return date.getFullYear()+"-"+(date.getMonth()+1);
+}
+
+function render(){
+  const key = getMonthKey(currentDate);
+  const data = JSON.parse(localStorage.getItem(key)) || [];
+  const container = document.getElementById("movements");
+  container.innerHTML="";
+  let total = 0;
+
+  document.getElementById("monthTitle").innerText =
+    currentDate.toLocaleString("es",{month:"long",year:"numeric"});
+
+  data.forEach((m,i)=>{
+    total += (parseFloat(m.haber)||0) - (parseFloat(m.debe)||0);
+
+    const card = document.createElement("div");
+    card.className="card";
+
+    card.innerHTML = `
+      <span>${m.fecha}</span>
+      <span>${m.detalle}</span>
+      <span class="debe">${m.debe||""}</span>
+      <span class="haber">${m.haber||""}</span>
+    `;
+
+    // Pulsación larga para borrar
+    let pressTimer;
+    card.addEventListener("touchstart",()=>{
+      pressTimer=setTimeout(()=>{
+        if(confirm("¿Borrar movimiento?")){
+          data.splice(i,1);
+          localStorage.setItem(key,JSON.stringify(data));
+          render();
+        }
+      },700);
+    });
+    card.addEventListener("touchend",()=>clearTimeout(pressTimer));
+
+    // Tap para editar
+    card.addEventListener("click",()=>{
+      editId=i;
+      openModal(m);
+    });
+
+    container.appendChild(card);
+  });
+
+  document.getElementById("saldo").innerText="Saldo: "+total.toFixed(2);
+}
+
+function openModal(data=null){
+  document.getElementById("modal").style.display="flex";
+  if(data){
+    fecha.value=data.fecha;
+    detalle.value=data.detalle;
+    debe.value=data.debe;
+    haber.value=data.haber;
+  }else{
+    fecha.value="";
+    detalle.value="";
+    debe.value="";
+    haber.value="";
+    editId=null;
+  }
+}
+
+function closeModal(){
+  document.getElementById("modal").style.display="none";
+}
+
+function saveMovement(){
+  const f=fecha.value;
+  if(!f)return alert("Ingrese fecha");
+
+  const d=detalle.value;
+  const deb=debe.value;
+  const hab=haber.value;
+
+  const dateObj=new Date(f);
+  const key=getMonthKey(dateObj);
+  let data=JSON.parse(localStorage.getItem(key))||[];
+
+  const movement={
+    fecha:f.split("-").reverse().join("/"),
+    detalle:d,
+    debe:deb,
+    haber:hab
+  };
+
+  if(editId!==null){
+    data[editId]=movement;
+  }else{
+    data.push(movement);
+  }
+
+  localStorage.setItem(key,JSON.stringify(data));
+  closeModal();
+  render();
+}
+
+function toggleDark(){
+  document.body.classList.toggle("dark");
+}
+
+// Swipe meses
+let startX=0;
+document.addEventListener("touchstart",e=>{
+  startX=e.changedTouches[0].screenX;
+});
+document.addEventListener("touchend",e=>{
+  let endX=e.changedTouches[0].screenX;
+  if(endX-startX>50){
+    currentDate.setMonth(currentDate.getMonth()-1);
+    render();
+  }
+  if(startX-endX>50){
+    currentDate.setMonth(currentDate.getMonth()+1);
+    render();
+  }
+});
+
+render();
+
+// Service worker
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("service-worker.js");
+}
+
+</script>
+
+</body>
+</html>
