@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ingresos y Egresos</title>
+<link rel="manifest" href="manifest.json">
+
+<style>
+
+/* ===== BLOQUEO DE SELECCIÓN Y SOMBREADO ===== */
+*{
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
+}
+
+body{
+    -webkit-tap-highlight-color:transparent;
+}
+/* ============================================ */
+
+:root{
+    --bg:#f4f6fb;
+    --card:#ffffff;
+    --text:#1e1e1e;
+    --primary:#4f46e5;
+    --income:#16a34a;
+    --expense:#dc2626;
+}
+
+body.dark{
+    --bg:#0f172a;
+    --card:#1e293b;
+    --text:#f1f5f9;
+}
+
+body{
+    margin:0;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    transition:.3s;
+}
+
+header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:16px;
+    font-size:18px;
+    font-weight:600;
+}
+
+#monthTitle{
+    text-align:center;
+    font-size:20px;
+    font-weight:600;
+    margin-bottom:10px;
+    text-transform:capitalize;
+}
+
+#grid{
+    padding:10px;
+    padding-bottom:90px;
+}
+
+.card{
+    background:var(--card);
+    border-radius:16px;
+    padding:12px;
+    margin-bottom:10px;
+    box-shadow:0 4px 12px rgba(0,0,0,.08);
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    transition:.2s;
+}
+
+.card:active{
+    transform:scale(.98);
+}
+
+.rowTop{
+    display:flex;
+    justify-content:space-between;
+    font-size:14px;
+    opacity:.7;
+}
+
+.rowBottom{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:16px;
+    font-weight:500;
+}
+
+.income{
+    color:var(--income);
+    font-weight:600;
+}
+
+.expense{
+    color:var(--expense);
+    font-weight:600;
+}
+
+.totalCard{
+    background:var(--primary);
+    color:white;
+    border-radius:18px;
+    padding:16px;
+    margin:15px;
+    text-align:center;
+    font-size:18px;
+    font-weight:bold;
+    box-shadow:0 6px 16px rgba(0,0,0,.2);
+}
+
+.fab{
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    width:60px;
+    height:60px;
+    border-radius:50%;
+    border:none;
+    background:var(--primary);
+    color:white;
+    font-size:32px;
+    box-shadow:0 6px 16px rgba(0,0,0,.3);
+}
+
+#formModal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.4);
+    display:none;
+    justify-content:center;
+    align-items:flex-end;
+}
+
+.formBox{
+    background:var(--card);
+    width:100%;
+    border-radius:20px 20px 0 0;
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+}
+
+.formBox input{
+    padding:12px;
+    border-radius:12px;
+    border:1px solid #ccc;
+    font-size:16px;
+}
+
+.buttonRow{
+    display:flex;
+    gap:10px;
+}
+
+.buttonRow button{
+    flex:1;
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    font-size:16px;
+    color:white;
+}
+
+.saveBtn{ background:var(--primary); }
+.cancelBtn{ background:#64748b; }
+
+</style>
+</head>
+<body>
+
+<header>
+    <div>💰 Mis Finanzas</div>
+    <button onclick="toggleDark()">🌙</button>
+</header>
+
+<div id="monthTitle"></div>
+<div id="grid"></div>
+
+<button class="fab" onclick="toggleForm()">+</button>
+
+<div id="formModal">
+    <div class="formBox">
+        <input type="date" id="date">
+        <input type="text" id="detail" placeholder="Detalle">
+        <input type="number" id="debe" placeholder="Debe (egreso)">
+        <input type="number" id="haber" placeholder="Haber (ingreso)">
+        <div class="buttonRow">
+            <button class="saveBtn" onclick="saveMovement()">Guardar</button>
+            <button class="cancelBtn" onclick="cancelForm()">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+
+/* ===== BLOQUEAR MENÚ CONTEXTUAL ===== */
+document.addEventListener("contextmenu",function(e){
+    e.preventDefault();
+});
+/* ===================================== */
+
+let currentDate=new Date();
+let movements=JSON.parse(localStorage.getItem("movements")||"{}");
+let editIndex=null;
+let editKey=null;
+let startX=0;
+let longPressTimer=null;
+
+function save(){
+    localStorage.setItem("movements",JSON.stringify(movements));
+}
+
+function getMonthKey(date){
+    return date.getFullYear()+"-"+(date.getMonth()+1);
+}
+
+function getKeyFromDateInput(dateStr){
+    const parts=dateStr.split("-");
+    return parts[0]+"-"+parseInt(parts[1]);
+}
+
+/* ✅ CORRECCIÓN DEFINITIVA DE FECHA (sin zona horaria) */
+function formatDate(dateStr){
+    const parts=dateStr.split("-");
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function render(){
+    const grid=document.getElementById("grid");
+    grid.innerHTML="";
+    const key=getMonthKey(currentDate);
+    const data=movements[key]||[];
+
+    document.getElementById("monthTitle").innerText=
+        currentDate.toLocaleString("es-ES",{month:"long",year:"numeric"});
+
+    let total=0;
+
+    data.forEach((m,index)=>{
+        const card=document.createElement("div");
+        card.className="card";
+
+        let amount=(parseFloat(m.haber)||0)-(parseFloat(m.debe)||0);
+        total+=amount;
+
+        card.innerHTML=`
+            <div class="rowTop">
+                <div>${m.date}</div>
+            </div>
+            <div class="rowBottom">
+                <div>${m.detail}</div>
+                <div class="${amount>=0?'income':'expense'}">
+                    ${amount>=0?'+':''}${amount.toFixed(2)}
+                </div>
+            </div>
+        `;
+
+        card.onclick=()=>loadEdit(index,key);
+
+        card.addEventListener("touchstart",()=>{
+            longPressTimer=setTimeout(()=>{
+                deleteMovement(index,key);
+            },700);
+        });
+
+        card.addEventListener("touchend",()=>{
+            clearTimeout(longPressTimer);
+        });
+
+        grid.appendChild(card);
+    });
+
+    const totalCard=document.createElement("div");
+    totalCard.className="totalCard";
+    totalCard.innerText="Saldo: "+total.toFixed(2);
+    grid.appendChild(totalCard);
+}
+
+function toggleForm(){
+    const modal=document.getElementById("formModal");
+    modal.style.display=modal.style.display==="flex"?"none":"flex";
+}
+
+function cancelForm(){
+    clearForm();
+    editIndex=null;
+    editKey=null;
+    document.getElementById("formModal").style.display="none";
+}
+
+function saveMovement(){
+    const date=document.getElementById("date").value;
+    const detail=document.getElementById("detail").value;
+    const debe=document.getElementById("debe").value;
+    const haber=document.getElementById("haber").value;
+
+    if(!date||!detail) return;
+
+    const key=getKeyFromDateInput(date);
+    const formatted=formatDate(date);
+
+    if(!movements[key]) movements[key]=[];
+
+    const movement={date:formatted,detail,debe,haber};
+
+    if(editIndex!==null){
+        movements[editKey].splice(editIndex,1);
+        movements[key].push(movement);
+        editIndex=null;
+        editKey=null;
+    }else{
+        movements[key].push(movement);
+    }
+
+    save();
+    cancelForm();
+    render();
+}
+
+function loadEdit(index,key){
+    const m=movements[key][index];
+    document.getElementById("detail").value=m.detail;
+    document.getElementById("debe").value=m.debe;
+    document.getElementById("haber").value=m.haber;
+
+    const parts=m.date.split("/");
+    document.getElementById("date").value=
+        `${parts[2]}-${parts[1]}-${parts[0]}`;
+
+    editIndex=index;
+    editKey=key;
+    toggleForm();
+}
+
+function deleteMovement(index,key){
+    if(!confirm("¿Borrar movimiento?")) return;
+    movements[key].splice(index,1);
+    save();
+    render();
+}
+
+function clearForm(){
+    document.getElementById("date").value="";
+    document.getElementById("detail").value="";
+    document.getElementById("debe").value="";
+    document.getElementById("haber").value="";
+}
+
+function toggleDark(){
+    document.body.classList.toggle("dark");
+}
+
+document.addEventListener("touchstart",e=>{
+    startX=e.touches[0].clientX;
+});
+
+document.addEventListener("touchend",e=>{
+    let endX=e.changedTouches[0].clientX;
+    let diff=startX-endX;
+
+    if(Math.abs(diff)>60){
+        if(diff>0){
+            currentDate.setMonth(currentDate.getMonth()+1);
+        }else{
+            currentDate.setMonth(currentDate.getMonth()-1);
+        }
+        render();
+    }
+});
+
+render();
+
+if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('service-worker.js');
+}
+</script>
+
+</body>
+</html>
